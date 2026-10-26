@@ -13,6 +13,12 @@ DreamCycle is a personal Sleep Cycle–style app, built as an installable web ap
 - **Sleep sounds:** rain, ocean, stream, wind, campfire, fan, white/pink/brown noise and theta binaural beats. All are generated on the device, with a sleep timer and fade-out. They can start automatically when you begin tracking.
 - **Offline support**, plus data export/import (JSON) and sample data for previewing.
 
+## Where your data lives
+
+Your sleep history is stored **only on your phone**, in the browser's IndexedDB database for this app. GitHub hosts only the app's code; nobody who opens the link can see your nights.
+
+Each night takes about 2 KB, so 5 years is under 4 MB, well within what Safari allows. If you delete the app from the home screen or change phones, the data goes with it. So once a month the app reminds you to make a backup: tap **Back up now** and choose **Save to Files** (iCloud Drive). To restore, use **Settings › Import data**.
+
 ## Install on your iPhone
 
 The app has to be served over **HTTPS** (iOS only allows the microphone and motion sensor on secure pages). The easiest free option is GitHub Pages:
@@ -56,7 +62,8 @@ When you change any file, bump `CACHE` in `sw.js` (e.g. `dreamcycle-v2`) so inst
 | `js/audio.js` | Generated sleep sounds and alarm tones (Web Audio) |
 | `js/app.js` | UI, night session, alarm flow |
 | `js/charts.js` | SVG sleep graph and charts |
-| `js/storage.js` | Local storage, export/import |
+| `js/storage.js` | IndexedDB storage, migration from v1, backups (export/import) |
+| `js/codec.js` | Compact night format (pure, tested) |
 | `js/demo.js` | Synthetic nights for tests and sample data |
 
 ## Limitations

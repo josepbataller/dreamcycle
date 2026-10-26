@@ -4,6 +4,7 @@ import http from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { generateDemoNights } from '../js/demo.js';
 
 const ROOT = process.cwd();
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
@@ -135,7 +136,24 @@ await shot('10-new-night');
 const alarmRow = await page.$$eval('.kv', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()).find((t) => t.startsWith('Alarm')));
 step(`saved night: ${alarmRow}`);
 
-const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dc.nights')).filter((n) => !n.demo));
+const readDb = () =>
+  page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const r = indexedDB.open('dreamcycle');
+        r.onsuccess = () => {
+          const g = r.result.transaction('nights').objectStore('nights').getAll();
+          g.onsuccess = () => {
+            resolve(g.result.map((n) => ({ ...n, m: Array.from(n.m), s: Array.from(n.s) })));
+            r.result.close();
+          };
+          g.onerror = () => reject(g.error);
+        };
+        r.onerror = () => reject(r.error);
+      }),
+  );
+await sleep(300);
+const saved = (await readDb()).filter((n) => !n.demo);
 if (saved.length !== 1 || saved[0].mood !== 'ok' || saved[0].alarm.snoozes !== 1) throw new Error(`unexpected saved night ${JSON.stringify(saved[0]?.alarm)}`);
 step(`stored night has ${saved[0].m.length} epochs, quality ${saved[0].summary.quality}`);
 
@@ -148,6 +166,34 @@ await page.waitForSelector('[data-action="recover-finish"]');
 await click('[data-action="recover-finish"]');
 await page.waitForSelector('.sheet-body.wake');
 step('interrupted night recovered and saved');
+
+// Migration from v1 storage (all nights as JSON in localStorage).
+const before = (await readDb()).length;
+const legacy = generateDemoNights(3).map((n, i) => ({ ...n, id: `legacy-${i}`, demo: false }));
+await page.evaluate((list) => localStorage.setItem('dc.nights', JSON.stringify(list)), legacy);
+await page.reload({ waitUntil: 'networkidle0' });
+await sleep(300);
+const afterDb = await readDb();
+const legacyLeft = await page.evaluate(() => localStorage.getItem('dc.nights'));
+if (afterDb.length !== before + 3 || legacyLeft !== null) throw new Error(`migration failed: ${before} -> ${afterDb.length}, legacy key ${legacyLeft ? 'still present' : 'removed'}`);
+const mig = afterDb.find((n) => n.id === 'legacy-0');
+if (!(mig.stages.length < 400 && /\d/.test(mig.stages))) throw new Error('migrated night not stored compactly');
+step(`v1 localStorage nights migrated to IndexedDB (${before} -> ${afterDb.length}), legacy key removed`);
+await page.evaluate(() => document.querySelector('#overlay [data-action="recover-discard"]')?.click());
+
+// Backup reminder: shown once there are real nights and no backup.
+await click('[data-action="tab"][data-tab="journal"]');
+await page.waitForSelector('.banner [data-action="export"]', { timeout: 3000 });
+await shot('11-backup-banner');
+await click('.banner [data-action="export"]');
+await sleep(500);
+if (await page.$('.banner [data-action="export"]')) throw new Error('backup banner still shown after backing up');
+step('backup reminder shown, disappears after backing up');
+
+await click('[data-action="tab"][data-tab="settings"]');
+await sleep(300);
+step(`settings: ${await page.$eval('#storageInfo', (el) => el.textContent)}`);
+await shot('12-settings-storage');
 
 await browser.close();
 server.close();

@@ -1,7 +1,8 @@
 import { analyzeNight, nextAlarmTime, shouldWake, STAGE_INFO, STAGE_ORDER, EPOCH_MS } from './analysis.js';
 import {
-  loadSettings, saveSettings, listNights, getNight, saveNight, saveNights, deleteNight,
+  initStorage, loadSettings, saveSettings, listNights, getNight, saveNight, saveNights, deleteNight,
   saveActive, loadActive, clearActive, exportAll, importAll, clearAll,
+  markBackedUp, lastBackupAt, snoozeBackupReminder, backupDue, storageUsage,
 } from './storage.js';
 import {
   unlockAudio, startKeepAlive, stopKeepAlive, resumeAudio, setSessionType,
@@ -109,7 +110,29 @@ function renderNav() {
 function render() {
   renderNav();
   const views = { sleep: viewSleep, journal: viewJournal, stats: viewStats, sounds: viewSounds, settings: viewSettings };
-  view.innerHTML = views[tab]();
+  const banner = (tab === 'sleep' || tab === 'journal') && backupDue() ? backupBanner() : '';
+  view.innerHTML = banner + views[tab]();
+  if (tab === 'settings') fillStorageInfo();
+}
+
+function backupBanner() {
+  const last = lastBackupAt();
+  return `<div class="banner">💾 <b>Back up your sleep history.</b> Your nights are only stored on this phone.
+    ${last ? `Last backup: ${fmtDate(last)}.` : 'You haven\'t made a backup yet.'}
+    Choose <b>Save to Files</b> (iCloud Drive) when asked.
+    <div class="banner-actions"><button class="secondary" data-action="export">Back up now</button>
+    <button class="link" data-action="backup-later">Later</button></div></div>`;
+}
+
+async function fillStorageInfo() {
+  const el = $('#storageInfo');
+  if (!el) return;
+  const last = lastBackupAt();
+  const count = listNights().filter((n) => !n.demo).length;
+  let text = `${count} night${count === 1 ? '' : 's'} stored on this phone · last backup: ${last ? fmtDate(last) : 'never'}`;
+  const u = await storageUsage();
+  if (u && u.usage != null) text += ` · using ${(u.usage / 1048576).toFixed(1)} MB`;
+  el.textContent = text;
 }
 
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -304,7 +327,8 @@ function viewSettings() {
     </section>
     <section class="card form">
       <div class="label">Your data</div>
-      <button class="secondary wide" data-action="export">Export data (JSON)</button>
+      <p class="muted small" id="storageInfo">&nbsp;</p>
+      <button class="secondary wide" data-action="export">Back up / export data</button>
       <label class="secondary wide filebtn">Import data<input type="file" accept="application/json,.json" data-action-change="import" hidden></label>
       ${demoCount ? `<button class="secondary wide" data-action="remove-demo">Remove sample data (${demoCount} nights)</button>` : '<button class="secondary wide" data-action="load-demo">Load sample data</button>'}
       <button class="danger wide" data-action="clear-all">Delete all data</button>
@@ -631,26 +655,41 @@ document.addEventListener('input', (e) => {
   if (el.dataset.setting === 'aidVolume') setAidVolume(Number(el.value));
 });
 
-function download(name, text) {
+// Resolves true when the file was handed over (shared/saved or downloaded).
+async function download(name, text) {
   const blob = new Blob([text], { type: 'application/json' });
   const file = new File([blob], name, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: name }).catch(() => {});
-    return;
+    try {
+      await navigator.share({ files: [file], title: name });
+      return true;
+    } catch (e) {
+      if (e.name === 'AbortError') return false; // user cancelled
+      // Sharing unavailable: fall back to a download below.
+    }
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return true;
+}
+
+async function backup() {
+  const ok = await download(`dreamcycle-backup-${new Date().toISOString().slice(0, 10)}.json`, exportAll());
+  if (ok) {
+    markBackedUp();
+    render();
+  }
 }
 
 function importFile(input) {
   const f = input.files && input.files[0];
   if (!f) return;
   f.text()
-    .then((t) => {
-      const count = importAll(t);
+    .then((t) => importAll(t))
+    .then((count) => {
       alert(`Imported ${count} nights.`);
       render();
     })
@@ -736,7 +775,11 @@ const actions = {
     setSessionType('playback');
     previewAlarm(settings.alarmSound, settings.alarmVolume);
   },
-  export: () => download(`dreamcycle-${new Date().toISOString().slice(0, 10)}.json`, exportAll()),
+  export: () => backup(),
+  'backup-later': () => {
+    snoozeBackupReminder(7);
+    render();
+  },
   'load-demo': () => {
     const demo = generateDemoNights(14, settings.goalHours);
     saveNights([...listNights().filter((n) => !n.demo), ...demo]);
@@ -748,9 +791,10 @@ const actions = {
   },
   'clear-all': () => {
     if (!confirm('Delete ALL nights and settings? This cannot be undone. Export first if you want a backup.')) return;
-    clearAll();
-    settings = loadSettings();
-    render();
+    clearAll().then(() => {
+      settings = loadSettings();
+      render();
+    });
   },
   'recover-resume': () => onStart(loadActive()),
   'recover-finish': () => {
@@ -811,6 +855,7 @@ setInterval(() => {
 // ---------------------------------------------------------------------------
 // Boot
 
+await initStorage();
 render();
 const pending = loadActive();
 if (pending) showRecover(pending);
