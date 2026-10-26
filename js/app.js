@@ -12,6 +12,7 @@ import {
 import { Tracker, requestMotionPermission, requestMic } from './tracker.js';
 import { hypnogram, stageBar, qualityRing, barChart } from './charts.js';
 import { generateDemoNights } from './demo.js';
+import { icon, SOUND_ICON } from './icons.js';
 
 const $ = (sel) => document.querySelector(sel);
 const view = $('#view');
@@ -33,11 +34,11 @@ const NOTES = [
   { id: 'shared', label: 'Shared bed', icon: '👥' },
 ];
 const MOODS = [
-  { id: 'good', icon: '😊', label: 'Good' },
-  { id: 'ok', icon: '😐', label: 'OK' },
-  { id: 'bad', icon: '😞', label: 'Bad' },
+  { id: 'good', icon: 'smile', label: 'Good' },
+  { id: 'ok', icon: 'neutral', label: 'OK' },
+  { id: 'bad', icon: 'frown', label: 'Bad' },
 ];
-const noteInfo = (id) => NOTES.find((n) => n.id === id) || { id, label: id, icon: '•' };
+const noteInfo = (id) => NOTES.find((n) => n.id === id) || { id, label: id, icon: '' };
 const moodInfo = (id) => MOODS.find((m) => m.id === id);
 
 let settings = loadSettings();
@@ -94,16 +95,16 @@ document.addEventListener('visibilitychange', () => {
 // Tabs
 
 const TABS = [
-  { id: 'sleep', label: 'Sleep', icon: '🌙' },
-  { id: 'journal', label: 'Journal', icon: '📓' },
-  { id: 'stats', label: 'Statistics', icon: '📊' },
-  { id: 'sounds', label: 'Sounds', icon: '🎵' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'sleep', label: 'Sleep', icon: 'moon' },
+  { id: 'journal', label: 'Journal', icon: 'journal' },
+  { id: 'stats', label: 'Statistics', icon: 'chart' },
+  { id: 'sounds', label: 'Sounds', icon: 'sound' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
 function renderNav() {
   nav.innerHTML = TABS.map(
-    (t) => `<button data-action="tab" data-tab="${t.id}" class="${tab === t.id ? 'on' : ''}"><span>${t.icon}</span>${t.label}</button>`,
+    (t) => `<button data-action="tab" data-tab="${t.id}" class="${tab === t.id ? 'on' : ''}">${icon(t.icon, 22)}<span>${t.label}</span></button>`,
   ).join('');
 }
 
@@ -117,11 +118,11 @@ function render() {
 
 function backupBanner() {
   const last = lastBackupAt();
-  return `<div class="banner">💾 <b>Back up your sleep history.</b> Your nights are only stored on this phone.
+  return `<div class="banner">${icon('save', 18, 'banner-ic')}<div><b>Back up your sleep history.</b> Your nights are only stored on this phone.
     ${last ? `Last backup: ${fmtDate(last)}.` : 'You haven\'t made a backup yet.'}
     Choose <b>Save to Files</b> (iCloud Drive) when asked.
     <div class="banner-actions"><button class="secondary" data-action="export">Back up now</button>
-    <button class="link" data-action="backup-later">Later</button></div></div>`;
+    <button class="link" data-action="backup-later">Later</button></div></div></div>`;
 }
 
 async function fillStorageInfo() {
@@ -151,16 +152,16 @@ function viewSleep() {
   const aid = AID_SOUNDS.find((a) => a.id === s.aidSound);
   const installHint =
     isIOS && !isStandalone && !localStorage.getItem('dc.hideInstall')
-      ? `<div class="banner">To install: tap <b>Share</b> <span class="share-ic">⬆︎</span> then <b>Add to Home Screen</b>. <button class="link" data-action="hide-install">Dismiss</button></div>`
+      ? `<div class="banner">${icon('share', 18, 'banner-ic')}<div>To install: tap <b>Share</b> then <b>Add to Home Screen</b>. <button class="link" data-action="hide-install">Dismiss</button></div></div>`
       : '';
   return `
     ${installHint}
-    <header class="top"><h1>Sleep</h1></header>
+    <header class="top"><h1>Sleep</h1><span class="muted">${new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</span></header>
     <section class="card alarm-card">
       <div class="seg">${[['smart', 'Smart alarm'], ['regular', 'Regular'], ['none', 'No alarm']]
         .map(([m, l]) => `<button data-action="mode" data-mode="${m}" class="${s.alarmMode === m ? 'on' : ''}">${l}</button>`)
         .join('')}</div>
-      ${s.alarmMode !== 'none' ? `<input type="time" class="big-time" data-setting="alarmTime" value="${s.alarmTime}" aria-label="Alarm time">` : '<div class="big-time moon">🌙</div>'}
+      ${s.alarmMode !== 'none' ? `<input type="time" class="big-time" data-setting="alarmTime" value="${s.alarmTime}" aria-label="Alarm time">` : `<div class="big-time moon">${icon('moon', 56)}</div>`}
       <p class="center sub">${subtitle}</p>
       ${s.alarmMode === 'smart'
         ? `<div class="label">Wake-up window</div>
@@ -173,20 +174,20 @@ function viewSleep() {
     <section class="card row">
       <div class="grow">
         <div class="label">Sleep aid</div>
-        <div>${aid ? `${aid.icon} ${aid.name}` : 'None'} · ${s.aidTimerMin ? `${s.aidTimerMin} min` : 'all night'}
+        <div class="row-value">${aid ? aid.name : 'None'} · ${s.aidTimerMin ? `${s.aidTimerMin} min` : 'all night'}
           <button class="link" data-action="tab" data-tab="sounds">Change</button></div>
       </div>
       <label class="switch"><input type="checkbox" data-setting="aidOnStart" ${s.aidOnStart ? 'checked' : ''}><span></span></label>
     </section>
-    <button class="primary big" data-action="start">Start</button>
-    <p class="tip">📱 Plug your phone in. Put it face down on the mattress near your pillow (best: motion + sound), or on the nightstand with the microphone uncovered. Keep the app open: the screen stays on and dark until morning.</p>`;
+    <button class="primary big" data-action="start">Start sleep tracking</button>
+    <p class="tip">Plug your phone in. Put it face down on the mattress near your pillow (best: motion + sound), or on the nightstand with the microphone uncovered. Keep the app open: the screen stays on and dark until morning.</p>`;
 }
 
 function viewJournal() {
   const nights = listNights();
   if (!nights.length) {
     return `<header class="top"><h1>Journal</h1></header>
-      <div class="empty"><div class="empty-ic">📓</div><p>No nights yet. Start tracking from the Sleep tab tonight.</p>
+      <div class="empty">${icon('journal', 40, 'empty-ic')}<p>No nights yet. Start tracking from the Sleep tab tonight.</p>
       <button class="secondary" data-action="load-demo">Load sample data</button></div>`;
   }
   return `<header class="top"><h1>Journal</h1></header>
@@ -200,7 +201,7 @@ function viewJournal() {
             <div class="nc-q">${n.summary.quality}%</div>
           </div>
           <div class="mini">${hypnogram(n.stages, n.start, n.end, { mini: true, height: 54 })}</div>
-          <div class="nc-foot">${mood ? mood.icon : ''} ${(n.notes || []).map((id) => noteInfo(id).icon).join(' ')}${n.demo ? '<span class="tag">sample</span>' : ''}</div>
+          <div class="nc-foot">${mood ? `<span class="mood-ic ${mood.id}">${icon(mood.icon, 16)}</span>` : ''}${(n.notes || []).slice(0, 3).map((id) => `<span class="tag">${noteInfo(id).label}</span>`).join('')}${(n.notes || []).length > 3 ? `<span class="tag">+${n.notes.length - 3}</span>` : ''}${n.demo ? '<span class="tag sample">sample</span>' : ''}</div>
         </article>`;
       })
       .join('')}`;
@@ -224,7 +225,7 @@ function viewStats() {
     <div class="seg small">${periods.map(([p, l]) => `<button data-action="period" data-p="${p}" class="${statsPeriod === p ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const nights = (statsPeriod ? all.filter((n) => n.start >= Date.now() - statsPeriod * 86400000) : all).slice().reverse();
   if (!nights.length) {
-    return `${head}<div class="empty"><div class="empty-ic">📊</div><p>No nights in this period yet.</p>
+    return `${head}<div class="empty">${icon('chart', 40, 'empty-ic')}<p>No nights in this period yet.</p>
       ${all.length ? '' : '<button class="secondary" data-action="load-demo">Load sample data</button>'}</div>`;
   }
   const avg = (f) => nights.reduce((a, n) => a + f(n), 0) / nights.length;
@@ -252,7 +253,7 @@ function viewStats() {
 
   const moodRows = MOODS.map((m) => {
     const arr = nights.filter((n) => n.mood === m.id);
-    return arr.length ? `<div class="kv"><span>${m.icon} ${m.label} (${arr.length})</span><b>${Math.round(arr.reduce((a, n) => a + n.summary.quality, 0) / arr.length)}% avg</b></div>` : '';
+    return arr.length ? `<div class="kv"><span class="with-ic"><span class="mood-ic ${m.id}">${icon(m.icon, 16)}</span>${m.label} <span class="muted small">(${arr.length})</span></span><b>${Math.round(arr.reduce((a, n) => a + n.summary.quality, 0) / arr.length)}% avg</b></div>` : '';
   }).join('');
 
   return `${head}
@@ -275,7 +276,7 @@ function viewStats() {
     ${impact.length ? `<section class="card"><div class="label">Sleep notes vs quality</div>
       ${impact.map((r) => {
         const diff = Math.round(r.with - r.without);
-        return `<div class="kv"><span>${noteInfo(r.id).icon} ${noteInfo(r.id).label} <span class="muted small">(${r.n})</span></span><b class="${diff < 0 ? 'neg' : 'pos'}">${diff > 0 ? '+' : ''}${diff}%</b></div>`;
+        return `<div class="kv"><span>${noteInfo(r.id).label} <span class="muted small">(${r.n})</span></span><b class="${diff < 0 ? 'neg' : 'pos'}">${diff > 0 ? '+' : ''}${diff}%</b></div>`;
       }).join('')}
       <p class="muted small">Average quality on nights with the note, compared with nights without it.</p></section>` : ''}
     ${moodRows ? `<section class="card"><div class="label">Wake-up mood</div>${moodRows}</section>` : ''}`;
@@ -288,7 +289,7 @@ function viewSounds() {
     <p class="muted">Calming sounds generated on the phone (they work offline). Tap to play or stop.</p>
     <div class="sound-grid">${AID_SOUNDS.map(
       (a) => `<button class="sound ${s.aidSound === a.id ? 'sel' : ''} ${playing === a.id ? 'playing' : ''}" data-action="aid" data-id="${a.id}">
-        <span class="sound-ic">${a.icon}</span><span>${a.name}</span>${playing === a.id ? '<span class="eq"><i></i><i></i><i></i></span>' : ''}</button>`,
+        <span class="sound-ic">${icon(SOUND_ICON[a.id] || 'sound', 24)}</span><span>${a.name}</span>${playing === a.id ? '<span class="eq"><i></i><i></i><i></i></span>' : ''}</button>`,
     ).join('')}</div>
     <section class="card">
       <div class="label">Sleep timer</div>
@@ -519,14 +520,14 @@ function updateNight() {
   const motionOk = tracker.motionSeen;
   const tracked = night.m.length * EPOCH_MS;
   $('#nightStatus').innerHTML = `
-    <span class="pill ${tracker.micOn ? 'ok' : ''}">🎙️ Mic ${tracker.micOn ? (currentAid() ? 'paused' : 'on') : 'off'}</span>
-    <span class="pill ${motionOk ? 'ok' : ''}">📳 Motion ${motionOk ? 'on' : 'off'}</span>
-    <span class="pill">⏱ ${fmtDur(tracked)}</span>`;
+    <span class="pill ${tracker.micOn ? 'ok' : ''}">${icon('mic', 14)}Mic ${tracker.micOn ? (currentAid() ? 'paused' : 'on') : 'off'}</span>
+    <span class="pill ${motionOk ? 'ok' : ''}">${icon('motion', 14)}Motion ${motionOk ? 'on' : 'off'}</span>
+    <span class="pill">${icon('clock', 14)}${fmtDur(tracked)}</span>`;
   const aid = currentAid();
   const info = AID_SOUNDS.find((x) => x.id === (aid || settings.aidSound));
   $('#nightAid').innerHTML = aid
-    ? `${info.icon} ${info.name} playing <button class="link" data-action="aid-stop">Stop</button>`
-    : `<button class="link" data-action="aid-night">${info ? `${info.icon} Play ${info.name}` : ''}</button>`;
+    ? `${info.name} playing <button class="link" data-action="aid-stop">Stop</button>`
+    : `<button class="link" data-action="aid-night">${info ? `Play ${info.name}` : ''}</button>`;
   const gaps = night.m.filter((v) => v == null).length;
   $('#nightWarn').innerHTML =
     night.sensors.motion || night.sensors.mic
@@ -540,7 +541,7 @@ function showRinging() {
   overlay.className = 'overlay ringing';
   overlay.innerHTML = `<div class="ring-wrap">
       <div class="ring-time">${fmtTime(Date.now())}</div>
-      <div class="ring-msg">Good morning ☀️</div>
+      <div class="ring-msg">Good morning</div>
       <div class="muted">${session.night.alarm.reason === 'light-sleep' ? 'Woken up during light sleep' : ''}</div>
       <button class="primary big" data-action="snooze">Snooze ${settings.snoozeMin} min</button>
       ${settings.shakeToSnooze ? '<p class="muted small center">or shake the phone</p>' : ''}
@@ -549,16 +550,17 @@ function showRinging() {
 }
 
 function moodButtons(n) {
-  return `<div class="moods">${MOODS.map((m) => `<button class="mood ${n.mood === m.id ? 'on' : ''}" data-action="mood" data-id="${n.id}" data-mood="${m.id}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>`;
+  return `<div class="moods">${MOODS.map((m) => `<button class="mood ${n.mood === m.id ? 'on' : ''}" data-action="mood" data-id="${n.id}" data-mood="${m.id}">${icon(m.icon, 28)}<span>${m.label}</span></button>`).join('')}</div>`;
 }
 function noteChips(n) {
-  return `<div class="chips">${NOTES.map((t) => `<button class="chip ${(n.notes || []).includes(t.id) ? 'on' : ''}" data-action="note" data-id="${n.id}" data-note="${t.id}">${t.icon} ${t.label}</button>`).join('')}</div>`;
+  return `<div class="chips">${NOTES.map((t) => `<button class="chip ${(n.notes || []).includes(t.id) ? 'on' : ''}" data-action="note" data-id="${n.id}" data-note="${t.id}">${t.label}</button>`).join('')}</div>`;
 }
 
 function showWakeUp(night) {
   overlay.className = 'overlay sheet';
   overlay.innerHTML = `<div class="sheet-body wake">
-      <h2>Good morning ☀️</h2>
+      <div class="wake-sun">${icon('sun', 36)}</div>
+      <h2>Good morning</h2>
       ${qualityRing(night.summary.quality, 130)}
       <p class="center">${fmtDur(night.summary.asleepMs)} asleep · ${fmtDur(night.summary.inBedMs)} in bed</p>
       <div class="label">How do you feel?</div>
@@ -587,7 +589,7 @@ function showDetail(id) {
   const sensors = [n.sensors?.mic && 'microphone', n.sensors?.motion && 'motion'].filter(Boolean).join(' + ') || 'none';
   overlay.className = 'overlay sheet';
   overlay.innerHTML = `<div class="sheet-head">
-      <button class="link" data-action="close">‹ Back</button>
+      <button class="link with-ic" data-action="close">${icon('back', 18)}Back</button>
       <b>${fmtDate(n.start)}</b>
       <button class="link danger-text" data-action="delete" data-id="${n.id}">Delete</button>
     </div>

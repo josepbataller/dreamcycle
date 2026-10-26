@@ -41,8 +41,10 @@ await page.evaluateOnNewDocument(() => {
 
 await mkdir('screenshots', { recursive: true });
 const shot = (name) => page.screenshot({ path: `screenshots/${name}.png` });
+// Scroll to the centre first so the fixed bottom nav never covers the target.
 const click = async (sel) => {
   await page.waitForSelector(sel, { visible: true });
+  await page.$eval(sel, (el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
   await page.click(sel);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -79,6 +81,7 @@ if (!(await page.$('.sound.playing'))) throw new Error('sleep sound did not star
 await shot('05-sounds');
 await click('[data-action="aid-stop"]');
 await sleep(1500);
+if (await page.$('.sound.playing')) throw new Error('sleep sound still playing after stop');
 step('sleep sound played and stopped');
 
 await click('[data-action="tab"][data-tab="settings"]');
@@ -96,12 +99,13 @@ await page.$eval('input[data-setting="alarmTime"]', (el, v) => {
   el.value = v;
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }, hhmm);
+step(`aid on start: ${await page.$eval('input[data-setting="aidOnStart"]', (el) => el.checked)}`);
 await click('[data-action="start"]');
 await page.waitForSelector('.overlay.night #nightClock');
 await sleep(2500);
 await shot('07-night');
 const status = await page.$eval('#nightStatus', (el) => el.textContent.replace(/\s+/g, ' ').trim());
-step(`night screen: ${status}`);
+step(`night screen: ${status} | aid: ${await page.$eval('#nightAid', (el) => el.textContent.trim())}`);
 if (!/Mic on/.test(status)) throw new Error('microphone not active');
 
 await page.evaluate(() => (window.__offset = 4 * 60000));
