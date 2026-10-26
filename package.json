@@ -1,0 +1,15 @@
+{
+  "name": "dreamcycle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sleep tracker with smart alarm and sleep sounds - installable web app (PWA)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "start": "npx --yes serve -l 8080 ."
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}
