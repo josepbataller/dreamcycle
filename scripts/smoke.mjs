@@ -105,7 +105,8 @@ await page.waitForSelector('.overlay.night #nightClock');
 await sleep(2500);
 await shot('07-night');
 const status = await page.$eval('#nightStatus', (el) => el.textContent.replace(/\s+/g, ' ').trim());
-step(`night screen: ${status} | aid: ${await page.$eval('#nightAid', (el) => el.textContent.trim())}`);
+step(`night screen: ${status} | levels: ${await page.$eval('#nightLevels', (el) => el.textContent.replace(/\s+/g, ' ').trim())}`);
+if (await page.$('[data-action="retry-mic"]')) throw new Error('mic reported silent with the fake audio device');
 if (!/Mic on/.test(status)) throw new Error('microphone not active');
 
 await page.evaluate(() => (window.__offset = 4 * 60000));

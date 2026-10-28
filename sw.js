@@ -1,5 +1,5 @@
 // Offline support: serve the app from cache, refresh it in the background.
-const CACHE = 'dreamcycle-v3';
+const CACHE = 'dreamcycle-v4';
 const FILES = [
   './',
   './index.html',

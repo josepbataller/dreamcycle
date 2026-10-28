@@ -1,6 +1,5 @@
 // Reads the microphone and motion sensors and condenses them into one
 // reading per 30-second epoch (see analysis.js for the format).
-import { getCtx } from './audio.js';
 import { EPOCH_MS } from './analysis.js';
 
 // Must be called from a tap (iOS asks for permission).
@@ -57,8 +56,26 @@ export class Tracker {
     this.tick = setInterval(() => this.checkEpoch(), 1000);
   }
 
+  // The microphone gets its own AudioContext, created *after* the stream
+  // exists and at the stream's sample rate. On iOS, opening the mic changes
+  // the hardware sample rate, and a context created earlier (the one used
+  // for sounds and the alarm) then receives silence from the mic.
   attachMic(stream) {
-    const c = getCtx();
+    this.stopMic();
+    const track = stream.getAudioTracks()[0];
+    const rate = track && track.getSettings ? track.getSettings().sampleRate : undefined;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    let c;
+    try {
+      c = rate ? new AC({ sampleRate: rate }) : new AC();
+    } catch {
+      c = new AC();
+    }
+    c.addEventListener('statechange', () => {
+      if (c.state !== 'running' && this.micCtx === c) c.resume().catch(() => {});
+    });
+    if (c.state !== 'running') c.resume().catch(() => {});
+    this.micCtx = c;
     this.stream = stream;
     this.source = c.createMediaStreamSource(stream);
     this.analyser = c.createAnalyser();
@@ -66,6 +83,7 @@ export class Tracker {
     this.source.connect(this.analyser);
     this.buf = new Float32Array(this.analyser.fftSize);
     this.floor = null;
+    this.level = { db: null, floor: null, ex: 0, frames: 0, silentFrames: 0 };
     this.micTimer = setInterval(() => this.sampleMic(), 100);
     this.micOn = true;
   }
@@ -74,8 +92,15 @@ export class Tracker {
     clearInterval(this.micTimer);
     if (this.source) this.source.disconnect();
     if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
-    this.stream = this.source = this.analyser = null;
+    if (this.micCtx) this.micCtx.close().catch(() => {});
+    this.stream = this.source = this.analyser = this.micCtx = null;
     this.micOn = false;
+  }
+
+  // True when the mic has been open for a while but only ever delivered
+  // digital silence (suspended context, iOS sample-rate problem, etc.).
+  get micSilent() {
+    return this.micOn && this.level && this.level.frames >= 50 && this.level.silentFrames === this.level.frames;
   }
 
   sampleMic() {
@@ -83,7 +108,8 @@ export class Tracker {
     this.analyser.getFloatTimeDomainData(this.buf);
     let sum = 0;
     for (let i = 0; i < this.buf.length; i++) sum += this.buf[i] * this.buf[i];
-    const db = 20 * Math.log10(Math.sqrt(sum / this.buf.length) + 1e-9);
+    const rms = Math.sqrt(sum / this.buf.length);
+    const db = 20 * Math.log10(rms + 1e-9);
     if (this.floor == null) this.floor = db;
     // Noise floor follows quiet levels quickly and loud levels slowly, so
     // steady noise (fan, rain sound) is ignored but short sounds stand out.
@@ -91,6 +117,13 @@ export class Tracker {
     const ex = db - this.floor - 8;
     if (ex > 0) this.acc.sEx += ex;
     this.acc.sFrames++;
+    const lv = this.level;
+    lv.db = db;
+    lv.floor = this.floor;
+    lv.ex = Math.max(0, ex);
+    lv.frames++;
+    if (rms < 1e-6) lv.silentFrames++;
+    if (this.micCtx && this.micCtx.state !== 'running') this.micCtx.resume().catch(() => {});
   }
 
   onMotion(e) {
@@ -114,6 +147,7 @@ export class Tracker {
     const mag = Math.sqrt(x * x + y * y + z * z);
     this.acc.mSum += mag;
     this.acc.mCount++;
+    this.motionLevel = mag;
     if (this.shakeEnabled) this.detectShake(mag);
   }
 

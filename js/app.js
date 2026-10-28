@@ -422,6 +422,7 @@ function clockTick() {
   }
   const clock = $('#nightClock');
   if (clock) clock.textContent = fmtTime(now);
+  updateLevels();
   // Nudge the clock around a little each minute to avoid screen burn-in.
   if (clock && new Date(now).getSeconds() === 0) {
     clock.style.transform = `translate(${Math.round(Math.random() * 30 - 15)}px, ${Math.round(Math.random() * 40 - 20)}px)`;
@@ -499,6 +500,7 @@ function showNight() {
       <div class="night-clock" id="nightClock">${fmtTime(Date.now())}</div>
       <div class="night-sub" id="nightSub"></div>
       <div class="night-status" id="nightStatus"></div>
+      <div id="nightLevels" class="night-levels"></div>
       <div id="nightAid" class="night-aid"></div>
       ${wakeLockSupported ? '' : '<div class="warn">This iOS version can\'t keep the screen on by itself. Go to Settings › Display &amp; Brightness › Auto-Lock › Never before you sleep, and turn it back on in the morning.</div>'}
       <div id="nightWarn"></div>
@@ -529,12 +531,40 @@ function updateNight() {
     ? `${info.name} playing <button class="link" data-action="aid-stop">Stop</button>`
     : `<button class="link" data-action="aid-night">${info ? `Play ${info.name}` : ''}</button>`;
   const gaps = night.m.filter((v) => v == null).length;
-  $('#nightWarn').innerHTML =
-    night.sensors.motion || night.sensors.mic
-      ? gaps > 6 && night.m.length > 20 && night.s.filter((v) => v == null).length > 6 && !aid
-        ? '<div class="warn small">Tracking paused for a while (was the app closed or the phone locked?). Keep the app open on screen.</div>'
-        : ''
-      : '<div class="warn small">No sensors: sleep isn\'t being tracked, but the alarm will ring.</div>';
+  let warn = '';
+  if (!night.sensors.motion && !night.sensors.mic) warn = 'No sensors: sleep isn\'t being tracked, but the alarm will ring.';
+  else if (tracker.micSilent) warn = 'The microphone is open but no sound is coming through. <button class="link" data-action="retry-mic">Retry microphone</button>';
+  else if (gaps > 6 && night.m.length > 20 && night.s.filter((v) => v == null).length > 6 && !aid) warn = 'Tracking paused for a while (was the app closed or the phone locked?). Keep the app open on screen.';
+  $('#nightWarn').innerHTML = warn ? `<div class="warn small">${warn}</div>` : '';
+  updateLevels();
+}
+
+// Live sound/motion meter on the night screen, so you can check at bedtime
+// (clap, tap the mattress) that the sensors really pick something up.
+let lastSilent = false;
+function updateLevels() {
+  const el = $('#nightLevels');
+  if (!el || !session) return;
+  const t = session.tracker;
+  const lv = t.level;
+  const sound = t.micOn && lv && lv.db != null ? Math.max(0, Math.min(1, (lv.db - lv.floor) / 30)) : 0;
+  const motion = t.motionSeen ? Math.max(0, Math.min(1, (t.motionLevel || 0) / 2)) : 0;
+  const bar = (label, v, on) => `<div class="lvl ${on ? '' : 'off'}"><span>${label}</span><i><b style="width:${Math.round(v * 100)}%"></b></i></div>`;
+  el.innerHTML = bar('Sound', sound, t.micOn) + bar('Motion', motion, t.motionSeen);
+  if (t.micSilent !== lastSilent) {
+    lastSilent = t.micSilent;
+    updateNight();
+  }
+}
+
+async function retryMic() {
+  if (!session) return;
+  unlockAudio();
+  const stream = await requestMic();
+  if (!stream) return alert('Microphone access failed. Check Settings › Apps › DreamCycle › Microphone.');
+  session.tracker.attachMic(stream);
+  session.night.sensors.mic = true;
+  updateNight();
 }
 
 function showRinging() {
@@ -601,6 +631,7 @@ function showDetail(id) {
           <div><span>Went to bed</span><b>${fmtTime(n.start)}</b></div>
           <div><span>Woke up</span><b>${fmtTime(n.end)}</b></div>
         </div></div>
+      ${s.lowSignal ? '<div class="warn small">Hardly any movement or sound was detected this night, so the stages below aren\'t reliable. Check the live Sound/Motion meter on the night screen next time: clap or tap the mattress and the bars should react.</div>' : ''}
       <section class="card">${hypnogram(n.stages, n.start, n.end)}</section>
       <section class="card">
         ${stageBar(s.minutes)}
@@ -772,6 +803,7 @@ const actions = {
     if (settings.aidSound) playAid(settings.aidSound, { volume: settings.aidVolume, timerMin: settings.aidTimerMin });
   },
   snooze: () => snooze(),
+  'retry-mic': () => retryMic(),
   'test-alarm': () => {
     unlockAudio();
     setSessionType('playback');

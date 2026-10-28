@@ -203,8 +203,14 @@ export function summarize(night, stages, { goalHours = 8 } = {}) {
   const wakes = Math.max(0, 1 - awakenings / 6) * 10;
   const quality = sleepEpochs ? Math.max(1, Math.min(100, Math.round(duration + eff + deep + rem + wakes))) : 0;
 
+  // A night where neither sensor ever saw clear activity (not even getting
+  // into or out of bed) can't be trusted; flag it rather than report deep sleep.
+  const act = combinedActivity(night.m || [], night.s || []);
+  const lowSignal = !act || percentile(act, 0.99) < 0.35;
+
   return {
-    quality,
+    quality: lowSignal ? Math.min(quality, 50) : quality,
+    lowSignal,
     inBedMs,
     asleepMs,
     latencyMs: first >= 0 ? first * EPOCH_MS : null,

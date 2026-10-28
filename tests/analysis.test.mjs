@@ -106,3 +106,13 @@ test('demo nights are analysed and plausible', () => {
     assert.ok(n.summary.quality > 30);
   }
 });
+
+test('a flat night (no sensor activity at all) is flagged as low signal', () => {
+  const n = 900;
+  const flat = { start: 0, end: n * EPOCH_MS, m: Array.from({ length: n }, (_, i) => 5 + (i % 3)), s: new Array(n).fill(0) };
+  const { summary } = analyzeNight(flat);
+  assert.equal(summary.lowSignal, true);
+  assert.ok(summary.quality <= 50);
+  const { m, s } = synthNight({ seed: 4, hours: 8 });
+  assert.equal(analyzeNight({ start: 0, end: m.length * EPOCH_MS, m, s }).summary.lowSignal, false);
+});

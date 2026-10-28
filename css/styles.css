@@ -372,7 +372,14 @@ select {
 .night-status { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 .pill { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #1b2040; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #4e5578; }
 .pill.ok { color: #4f8f7b; border-color: #1c3a33; }
+.night-levels { width: 100%; max-width: 260px; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.lvl { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #4e5578; }
+.lvl span { width: 44px; text-align: right; }
+.lvl i { flex: 1; height: 4px; border-radius: 2px; background: #141830; overflow: hidden; }
+.lvl b { display: block; height: 100%; background: #4f6fd6; border-radius: 2px; transition: width 0.25s; }
+.lvl.off { opacity: 0.4; }
 .night-aid { font-size: 13.5px; min-height: 28px; }
+.warn .link { color: #d9b36a; padding: 0 2px; }
 .night-aid .link { color: #5563a8; }
 .warn {
   border: 1px solid #4a3a1c;
